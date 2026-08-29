@@ -1,28 +1,38 @@
 import { Module } from '@nestjs/common';
+import {
+  ConfigModule,
+  ConfigService,
+} from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CreateProvidersTable1788062400000 } from './migrations/1788062400000-CreateProvidersTable';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
+    ConfigModule,
 
-      database:
-        process.env.MODEL_ROUTER_DB_PATH ??
-        'model-router.sqlite',
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
 
-      autoLoadEntities: true,
+      useFactory: (
+        configService: ConfigService,
+      ) => ({
+        type: 'sqlite' as const,
 
-      migrations: [
-        CreateProvidersTable1788062400000,
-      ],
+        database:
+          configService.get<string>(
+            'MODEL_ROUTER_DB_PATH',
+          ) ?? 'model-router.sqlite',
 
-      // Database structure is managed only by migrations.
-      synchronize: false,
+        autoLoadEntities: true,
 
-      // Do not silently change a production database on startup.
-      migrationsRun: false,
+        migrations: [
+          CreateProvidersTable1788062400000,
+        ],
+
+        synchronize: false,
+        migrationsRun: false,
+      }),
     }),
   ],
 })

@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request = require('supertest');
+import { DataSource } from 'typeorm';
 
 import { AppModule } from '../app.module';
 
@@ -11,10 +12,19 @@ describe('Providers API', () => {
   let app: INestApplication;
 
   beforeEach(async () => {
+    // Every test gets its own clean in-memory SQLite database.
+    process.env.MODEL_ROUTER_DB_PATH = ':memory:';
+
     const moduleFixture: TestingModule =
       await Test.createTestingModule({
         imports: [AppModule],
       }).compile();
+
+    const dataSource =
+      moduleFixture.get(DataSource);
+
+    // Test the real migration path instead of synchronize:true.
+    await dataSource.runMigrations();
 
     app = moduleFixture.createNestApplication();
 
@@ -33,6 +43,7 @@ describe('Providers API', () => {
 
   afterEach(async () => {
     await app.close();
+    delete process.env.MODEL_ROUTER_DB_PATH;
   });
 
   it('GET /v1/admin/providers should return an empty provider list', async () => {

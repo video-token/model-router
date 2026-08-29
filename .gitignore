@@ -35,3 +35,11 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Model Router local database
+model-router.sqlite
+model-router.sqlite-*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal

@@ -13,14 +13,14 @@ export class ProvidersController {
   ) {}
 
   @Get()
-  findAll(): ProviderView[] {
+  async findAll(): Promise<ProviderView[]> {
     return this.providersService.findAll();
   }
 
   @Post()
-  create(
+  async create(
     @Body() input: CreateProviderDto,
-  ): ProviderView {
+  ): Promise<ProviderView> {
     return this.providersService.create(input);
   }
 }

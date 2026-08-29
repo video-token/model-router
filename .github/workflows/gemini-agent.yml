@@ -1,0 +1,149 @@
+name: Gemini Coding Agent
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  coding-agent:
+    if: >-
+      github.event.issue.pull_request == null &&
+      contains(github.event.comment.body, '@gemini-cli') &&
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Create agent branch
+        run: |
+          BRANCH="agent/issue-${{ github.event.issue.number }}-${{ github.run_id }}"
+          echo "AGENT_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          git checkout -b "$BRANCH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Gemini coding agent
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |
+            You are implementing GitHub Issue #${{ github.event.issue.number }}
+            in the video-token/model-router repository.
+
+            ISSUE TITLE:
+            ${{ github.event.issue.title }}
+
+            ISSUE BODY:
+            ${{ github.event.issue.body }}
+
+            USER COMMAND:
+            ${{ github.event.comment.body }}
+
+            Before changing code, read:
+
+            - GEMINI.md
+            - .github/copilot-instructions.md
+            - docs/ARCHITECTURE-v0.1.md
+            - docs/API-CONTRACT-v0.1.md
+            - docs/DATA-MODEL-v0.1.md
+            - docs/SECURITY-v0.1.md
+
+            Implement ONLY the requested issue.
+
+            You may inspect and modify files in this repository.
+
+            Follow the existing architecture and coding style.
+
+            Do not modify main directly.
+
+            Do not commit secrets.
+
+            Do not enable TypeORM synchronize:true.
+
+            Before finishing, run and fix failures from:
+
+            npm run typecheck
+            npm test -- --runInBand
+            npm run build
+
+            Leave the working tree containing the completed implementation.
+          settings: |
+            {
+              "model": {
+                "maxSessionTurns": 50
+              }
+            }
+
+      - name: Verify implementation
+        run: |
+          npm run typecheck
+          npm test -- --runInBand
+          npm run build
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "gemini-coding-agent"
+          git config user.email "gemini-coding-agent@users.noreply.github.com"
+          git add -A
+          git commit -m "Implement issue #${{ github.event.issue.number }}"
+          git push origin "$AGENT_BRANCH"
+
+      - name: Create pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "$AGENT_BRANCH" \
+            --title "Implement #${{ github.event.issue.number }}: ${{ github.event.issue.title }}" \
+            --body "Automated implementation for #${{ github.event.issue.number }} using Gemini CLI.
+
+          Closes #${{ github.event.issue.number }}
+
+          Validation performed:
+          - npm run typecheck
+          - npm test -- --runInBand
+          - npm run build"
+
+      - name: Comment when no changes were produced
+        if: steps.changes.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --body "Gemini completed the task but produced no repository changes. Please review the Actions log."

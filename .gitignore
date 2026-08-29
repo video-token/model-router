@@ -43,3 +43,7 @@ model-router.sqlite-*
 *.sqlite-shm
 *.sqlite-wal
 *.sqlite-journal
+
+# Gemini CLI
+.gemini/
+gha-creds-*.json
